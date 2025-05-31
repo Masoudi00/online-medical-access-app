@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Dict
+from sqlalchemy import func
 
 from app.controllers import appointment as appointment_crud
 from app.schemas import Appointment, AppointmentCreate, AppointmentUpdate
 from config.database import get_db
 from config.security import get_current_user
-from app.models import UserAccount
+from app.models import UserAccount, Appointment as AppointmentModel
 
 router = APIRouter(
     prefix="/appointments",
@@ -66,4 +67,32 @@ def delete_appointment(
     
     if appointment_crud.delete_appointment(db=db, appointment_id=appointment_id):
         return {"message": "Appointment deleted successfully"}
-    raise HTTPException(status_code=500, detail="Error deleting appointment") 
+    raise HTTPException(status_code=500, detail="Error deleting appointment")
+
+@router.get("/stats")
+def get_appointment_stats(
+    db: Session = Depends(get_db),
+    current_user: UserAccount = Depends(get_current_user)
+):
+    # Get total appointments
+    total_appointments = db.query(AppointmentModel).filter(
+        AppointmentModel.user_id == current_user.id
+    ).count()
+
+    # Get confirmed appointments
+    confirmed_appointments = db.query(AppointmentModel).filter(
+        AppointmentModel.user_id == current_user.id,
+        AppointmentModel.status == "confirmed"
+    ).count()
+
+    # Get rejected appointments
+    rejected_appointments = db.query(AppointmentModel).filter(
+        AppointmentModel.user_id == current_user.id,
+        AppointmentModel.status == "rejected"
+    ).count()
+
+    return {
+        "appointments_booked": total_appointments,
+        "appointments_confirmed": confirmed_appointments,
+        "appointments_rejected": rejected_appointments
+    } 

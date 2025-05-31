@@ -34,6 +34,7 @@ class UserResponse(UserCreate):
         orm_mode = True
 
 class UserProfile(BaseModel):
+    id: int
     first_name: str
     last_name: str
     email: EmailStr
@@ -45,6 +46,8 @@ class UserProfile(BaseModel):
     address: Optional[str] = None
     city: Optional[str] = None
     country: Optional[str] = None
+    insurance_provider: Optional[str] = None
+    insurance_id: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -59,10 +62,19 @@ class UserProfileUpdate(BaseModel):
     address: Optional[str] = None
     city: Optional[str] = None
     country: Optional[str] = None
+    insurance_provider: Optional[str] = None
+    insurance_id: Optional[str] = None
 
-    
-
+    class Config:
+        from_attributes = True
 
 class UserUpdateSettings(BaseModel):
     language: str
     theme: str
+
+class UserSettings(BaseModel):
+    language: str = Field(..., pattern="^(en|fr)$")
+    theme: Optional[str] = None
+
+    class Config:
+        from_attributes = True

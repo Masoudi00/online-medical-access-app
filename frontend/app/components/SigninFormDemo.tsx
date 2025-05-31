@@ -10,7 +10,7 @@ import { useAuth } from "@/app/context/AuthContext";
 
 export function SigninFormDemo() {
   const router = useRouter();
-  const { setIsLoggedIn } = useAuth();
+  const { setIsLoggedIn, setUser } = useAuth();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -21,6 +21,42 @@ export function SigninFormDemo() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.id]: e.target.value });
+  };
+
+  const fetchUserProfile = async (token: string) => {
+    try {
+      const response = await fetch('http://localhost:8000/profile/me', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch user profile');
+      }
+      
+      const data = await response.json();
+      console.log('Profile data after login:', data);
+      
+      // Ensure role is set correctly
+      const userRole = data.role || 'user';
+      console.log('User role after login:', userRole);
+      
+      const userData = {
+        id: data.id,
+        first_name: data.first_name,
+        last_name: data.last_name,
+        role: userRole,
+        profile_picture: data.profile_picture
+      };
+      
+      console.log('Setting user data after login:', userData);
+      setUser(userData);
+      return userData;
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      throw error;
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -49,6 +85,10 @@ export function SigninFormDemo() {
         setToken(data.access_token);
         // Update auth context
         setIsLoggedIn(true);
+        
+        // Fetch user profile immediately after login
+        await fetchUserProfile(data.access_token);
+        
         // Clear form
         setFormData({
           email: "",
@@ -60,6 +100,7 @@ export function SigninFormDemo() {
         }, 1000);
       }
     } catch (err) {
+      console.error('Login error:', err);
       setError("Server error");
     } finally {
       setIsLoading(false);

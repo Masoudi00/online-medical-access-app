@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.models import UserAccount, Appointment
 from app.schemas import UserCreate, AppointmentCreate, AppointmentUpdate
 from config.security import hash_password
@@ -12,10 +12,14 @@ def create_appointment(db: Session, appointment: AppointmentCreate, user_id: int
     return db_appointment
 
 def get_appointment(db: Session, appointment_id: int):
-    return db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    return db.query(Appointment).options(
+        joinedload(Appointment.doctor)
+    ).filter(Appointment.id == appointment_id).first()
 
 def get_user_appointments(db: Session, user_id: int, skip: int = 0, limit: int = 100):
-    return db.query(Appointment).filter(Appointment.user_id == user_id).offset(skip).limit(limit).all()
+    return db.query(Appointment).options(
+        joinedload(Appointment.doctor)
+    ).filter(Appointment.user_id == user_id).offset(skip).limit(limit).all()
 
 def update_appointment(db: Session, appointment_id: int, appointment: AppointmentUpdate):
     db_appointment = get_appointment(db, appointment_id)

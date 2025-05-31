@@ -4,8 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import React, { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/app/context/AuthContext";
+import { useLanguage } from "@/app/context/LanguageContext";
 import ProfilePopUp from "./ProfilePopUp";
-import { authFetch } from "@/app/utils/auth";
+import { fetchWithAuth } from '../utils/api';
 
 interface NavLink {
   href: string;
@@ -22,6 +23,7 @@ const Navbar = () => {
   const [isClick, setIsClick] = useState(false); // mobile menu open
   const [isProfileOpen, setIsProfileOpen] = useState(false); // popup open
   const { isLoggedIn } = useAuth();
+  const { translations } = useLanguage();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -31,14 +33,14 @@ const Navbar = () => {
   const fetchNotifications = async () => {
     if (isLoggedIn) {
       try {
-        const res = await authFetch("http://localhost:8000/notifications");
-        if (res?.ok) {
-          const data = await res.json();
-          const unreadNotifications = data.filter((n: any) => !n.is_read);
-          setUnreadCount(unreadNotifications.length);
-        }
+        const response = await fetchWithAuth("http://localhost:8000/notifications");
+        if (!response) return;
+        const data = await response.json();
+        const unreadNotifications = (data || []).filter((n: any) => !n.is_read);
+        setUnreadCount(unreadNotifications.length);
       } catch (err) {
         console.error("Error fetching notifications:", err);
+        setUnreadCount(0);
       }
     }
   };
@@ -47,11 +49,10 @@ const Navbar = () => {
     const fetchProfile = async () => {
       if (isLoggedIn) {
         try {
-          const res = await authFetch("http://localhost:8000/profile/me");
-          if (res?.ok) {
-            const data = await res.json();
-            setProfile(data);
-          }
+          const response = await fetchWithAuth("http://localhost:8000/profile/me");
+          if (!response) return;
+          const data = await response.json();
+          setProfile(data);
         } catch (err) {
           console.error("Error fetching profile:", err);
         }
@@ -70,18 +71,25 @@ const Navbar = () => {
     setIsClick(!isClick);
   };
 
+  const links: NavLink[] = [
+    { href: '/', label: 'Home' },
+    { href: '/appointments', label: translations.appointments },
+    { href: '/community', label: translations.community },
+    // ... rest of the links
+  ];
+
   const navLinks: NavLink[] = isLoggedIn
     ? []
     : [
-        { href: "/login", label: "Login" },
-        { href: "/register", label: "Register" },
+        { href: "/login", label: translations.login },
+        { href: "/register", label: translations.register },
       ];
 
   const linkClasses =
     "text-white hover:bg-white hover:text-black rounded-lg p-2 transition duration-300";
 
-  // Decide which profile button ref to use
-  const activeAnchorRef = isClick ? mobileProfileRef : desktopProfileRef;
+  // Update the activeAnchorRef type to be non-null
+  const activeAnchorRef = (isClick ? mobileProfileRef : desktopProfileRef) as React.RefObject<HTMLButtonElement>;
 
   const defaultAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'%3E%3C/path%3E%3Ccircle cx='12' cy='7' r='4'%3E%3C/circle%3E%3C/svg%3E";
 
@@ -140,7 +148,7 @@ const Navbar = () => {
                             width={32}
                             height={32}
                             className="w-full h-full object-cover"
-                            unoptimized
+                            unoptimized={!profile?.profile_picture}
                           />
                         </div>
                         {unreadCount > 0 && (
@@ -241,7 +249,7 @@ const Navbar = () => {
                         width={32}
                         height={32}
                         className="w-full h-full object-cover"
-                        unoptimized
+                        unoptimized={!profile?.profile_picture}
                       />
                     </div>
                     {unreadCount > 0 && (
@@ -250,7 +258,7 @@ const Navbar = () => {
                       </span>
                     )}
                   </div>
-                  Profile
+                  {translations.profile}
                   {unreadCount > 0 && (
                     <span className="ml-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
                       {unreadCount}

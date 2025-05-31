@@ -3,10 +3,13 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
+import { Ban } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 interface Appointment {
   id: number;
   user_id: number;
+  doctor_id?: number;
   appointment_date: string;
   status: string;
   reason: string;
@@ -39,18 +42,41 @@ const statusLabels = {
 export default function AdminDashboard() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [doctors, setDoctors] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'appointments' | 'users'>('appointments');
+  const [showDoctorModal, setShowDoctorModal] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState<number | null>(null);
   const router = useRouter();
 
   useEffect(() => {
     if (activeTab === 'appointments') {
       fetchAppointments();
+      fetchDoctors();
     } else {
       fetchUsers();
     }
   }, [activeTab]);
+
+  const fetchDoctors = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('No authentication token found. Please log in.');
+        return;
+      }
+
+      const response = await axios.get('http://localhost:8000/admin/doctors', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      setDoctors(response.data);
+    } catch (error: any) {
+      setError('Failed to fetch doctors');
+    }
+  };
 
   const fetchAppointments = async () => {
     try {
@@ -105,13 +131,20 @@ export default function AdminDashboard() {
   };
 
   const handleConfirm = async (appointmentId: number) => {
+    setSelectedAppointment(appointmentId);
+    setShowDoctorModal(true);
+  };
+
+  const handleDoctorSelect = async (doctorId: number) => {
     try {
       const token = localStorage.getItem('token');
       await axios.put(
-        `http://localhost:8000/admin/appointments/${appointmentId}/confirm`,
-        {},
+        `http://localhost:8000/admin/appointments/${selectedAppointment}/confirm`,
+        { doctor_id: doctorId },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      setShowDoctorModal(false);
+      setSelectedAppointment(null);
       fetchAppointments();
     } catch (error: any) {
       setError(error.response?.data?.detail || 'Failed to confirm appointment');
@@ -161,6 +194,25 @@ export default function AdminDashboard() {
       } else {
         setError(error.response?.data?.detail || 'Failed to delete appointment');
       }
+    }
+  };
+
+  const handleRoleToggle = async (userId: number, currentRole: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const newRole = currentRole === 'doctor' ? 'user' : 'doctor';
+      
+      await axios.put(
+        `http://localhost:8000/admin/users/${userId}/role`,
+        { role: newRole },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      setUsers(users.map(user => 
+        user.id === userId ? { ...user, role: newRole } : user
+      ));
+    } catch (error: any) {
+      setError(error.response?.data?.detail || 'Failed to update user role');
     }
   };
 
@@ -271,6 +323,135 @@ export default function AdminDashboard() {
     </div>
   );
 
+  const UsersTable = () => (
+    <div className="overflow-x-auto">
+      <table className="min-w-full bg-gray-800/50 rounded-lg overflow-hidden">
+        <thead className="bg-gray-900/50">
+          <tr>
+            <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Name</th>
+            <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Email</th>
+            <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Role</th>
+            <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-700">
+          {users.map((user) => (
+            <tr key={user.id} className="hover:bg-gray-700/50 transition-colors">
+              <td className="px-6 py-4 whitespace-nowrap text-gray-200">
+                {user.first_name} {user.last_name}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap text-gray-200">
+                {user.email}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                  user.role === 'doctor' ? 'bg-blue-900/50 text-blue-200' : 'bg-gray-900/50 text-gray-200'
+                }`}>
+                  {user.role}
+                </span>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <div className="flex gap-2">
+                  {user.role !== 'admin' && (
+                    <>
+                      <button
+                        onClick={() => handleRoleToggle(user.id, user.role)}
+                        className={`px-4 py-2 rounded-lg transition-colors ${
+                          user.role === 'doctor'
+                            ? 'bg-gray-600 hover:bg-gray-700 text-white'
+                            : 'bg-blue-600 hover:bg-blue-700 text-white'
+                        }`}
+                      >
+                        {user.role === 'doctor' ? 'Remove Doctor Role' : 'Make Doctor'}
+                      </button>
+                      <button
+                        onClick={() => handleBanUser(user.id, `${user.first_name} ${user.last_name}`)}
+                        className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
+                      >
+                        <Ban className="h-4 w-4 mr-1" />
+                        Ban
+                      </button>
+                    </>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const DoctorSelectionModal = () => {
+    if (!showDoctorModal) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
+          <h2 className="text-xl font-semibold mb-4 text-gray-100">Select a Doctor</h2>
+          <div className="space-y-4 max-h-96 overflow-y-auto">
+            {doctors.map((doctor) => (
+              <button
+                key={doctor.id}
+                onClick={() => handleDoctorSelect(doctor.id)}
+                className="w-full p-4 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors flex items-center justify-between"
+              >
+                <div>
+                  <p className="font-medium text-gray-100">Dr. {doctor.first_name} {doctor.last_name}</p>
+                  <p className="text-sm text-gray-400">{doctor.email}</p>
+                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            ))}
+            {doctors.length === 0 && (
+              <p className="text-center text-gray-400 py-4">No doctors available</p>
+            )}
+          </div>
+          <div className="mt-6 flex justify-end">
+            <button
+              onClick={() => {
+                setShowDoctorModal(false);
+                setSelectedAppointment(null);
+              }}
+              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg text-white transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const handleBanUser = async (userId: number, userName: string) => {
+    if (!window.confirm(`Are you sure you want to ban ${userName}? This action cannot be undone and will delete all their data.`)) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('Authentication token not found');
+        return;
+      }
+
+      const response = await axios.delete(`http://localhost:8000/admin/users/${userId}/ban`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      // Refresh the users list
+      fetchUsers();
+      toast.success(`User ${userName} has been banned successfully`);
+    } catch (error: any) {
+      console.error('Error banning user:', error);
+      toast.error(error.response?.data?.detail || 'Failed to ban user');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-[calc(100vh-4rem)]">
@@ -373,42 +554,15 @@ export default function AdminDashboard() {
                 <p className="mt-3 text-gray-400 text-lg">There are no users registered in the system.</p>
               </div>
             ) : (
-              <div className="bg-gray-800/50 rounded-lg border border-gray-700 overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-700">
-                  <thead className="bg-gray-900/50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Name</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Email</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Role</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-700">
-                    {users.map((user) => (
-                      <tr key={user.id} className="hover:bg-gray-700/50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-200">
-                            {user.first_name} {user.last_name}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-300">{user.email}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            user.role === 'admin' ? 'bg-purple-900/50 text-purple-200' : 'bg-blue-900/50 text-blue-200'
-                          }`}>
-                            {user.role}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div>
+                <h2 className="text-2xl font-semibold mb-4">Users</h2>
+                <UsersTable />
               </div>
             )}
           </div>
         )}
       </div>
+      <DoctorSelectionModal />
     </div>
   );
 } 
