@@ -56,10 +56,29 @@ async def get_doctor_calendar(
     if end_date:
         query = query.filter(Appointment.appointment_date <= end_date)
 
-    # Order by appointment date
+    # Order by appointment date and load all relationships
     appointments = query.order_by(Appointment.appointment_date.asc()).all()
     
-    return appointments
+    # Convert to list of AppointmentSchema
+    result = []
+    for appointment in appointments:
+        if appointment.user:
+            # Create a new appointment dict with all required fields
+            appointment_dict = {
+                "id": appointment.id,
+                "user_id": appointment.user_id,  # This is from the database column
+                "doctor_id": appointment.doctor_id,
+                "appointment_date": appointment.appointment_date,
+                "status": appointment.status,
+                "reason": appointment.reason,
+                "rejection_reason": appointment.rejection_reason,
+                "created_at": appointment.created_at,
+                "user": appointment.user,  # This includes the full user object
+                "doctor": appointment.doctor
+            }
+            result.append(appointment_dict)
+    
+    return result
 
 @router.get("/documents/{document_id}")
 async def get_patient_document(
