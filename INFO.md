@@ -26,6 +26,10 @@ class UserAccount:
     created_at: DateTime
     updated_at: DateTime
 
+    # Properties
+    is_admin: Boolean (computed)
+    is_doctor: Boolean (computed)
+
     # Relationships
     appointments_as_patient: List[Appointment] (1-to-many)
     appointments_as_doctor: List[Appointment] (1-to-many)
@@ -33,6 +37,7 @@ class UserAccount:
     documents: List[Document] (1-to-many)
     comments: List[Comment] (1-to-many)
     replies: List[Reply] (1-to-many)
+    liked_comments: List[Comment] (many-to-many)
 ```
 
 ### 2. Appointment
@@ -75,6 +80,7 @@ class Notification:
     # Primary Attributes
     id: Integer (PK)
     user_id: Integer (FK)
+    actor_id: Integer (FK, nullable)
     message: String
     type: String (enum)
     is_read: Boolean
@@ -84,6 +90,7 @@ class Notification:
 
     # Relationships
     user: UserAccount (many-to-1)
+    actor: UserAccount (many-to-1)
 ```
 
 ### 5. Comment
@@ -93,12 +100,14 @@ class Comment:
     id: Integer (PK)
     user_id: Integer (FK)
     content: Text
+    likes: Integer (default=0)
     created_at: DateTime
     updated_at: DateTime
 
     # Relationships
     user: UserAccount (many-to-1)
     replies: List[Reply] (1-to-many)
+    liked_by: List[UserAccount] (many-to-many)
 ```
 
 ### 6. Reply
@@ -117,6 +126,15 @@ class Reply:
     comment: Comment (many-to-1)
 ```
 
+## Association Tables
+
+### 1. comment_likes
+```python
+class CommentLikes:
+    user_id: Integer (FK)
+    comment_id: Integer (FK)
+```
+
 ## Relationships Summary
 
 ### One-to-Many Relationships
@@ -133,9 +151,13 @@ class Reply:
 2. Appointment -> UserAccount (doctor)
 3. Document -> UserAccount
 4. Notification -> UserAccount
-5. Comment -> UserAccount
-6. Reply -> UserAccount
-7. Reply -> Comment
+5. Notification -> UserAccount (actor)
+6. Comment -> UserAccount
+7. Reply -> UserAccount
+8. Reply -> Comment
+
+### Many-to-Many Relationships
+1. UserAccount <-> Comment (through comment_likes)
 
 ## Enums and Constants
 
@@ -178,6 +200,7 @@ class AppointmentStatus:
 4. notifications
 5. comments
 6. replies
+7. comment_likes
 
 ## Key Constraints
 
@@ -185,6 +208,8 @@ class AppointmentStatus:
    - email: unique
    - cin: unique
    - role: default="user"
+   - language: default="en"
+   - theme: default="light"
 
 2. Appointment:
    - doctor_id: nullable
@@ -197,6 +222,10 @@ class AppointmentStatus:
 4. Notification:
    - is_read: default=False
    - type: enum values
+   - actor_id: nullable
+
+5. Comment:
+   - likes: default=0
 
 ## Inheritance and Interfaces
 
@@ -207,18 +236,24 @@ The system uses Pydantic models for data validation and serialization:
    - AppointmentBase
    - DocumentBase
    - NotificationBase
+   - CommentBase
+   - ReplyBase
 
 2. Create Models:
    - UserCreate
    - AppointmentCreate
    - DocumentCreate
    - NotificationCreate
+   - CommentCreate
+   - ReplyCreate
 
 3. Response Models:
    - UserResponse
    - AppointmentResponse
    - DocumentResponse
    - NotificationResponse
+   - CommentResponse
+   - ReplyResponse
 
 ## Additional Notes for UML Diagram
 
@@ -231,6 +266,7 @@ The system uses Pydantic models for data validation and serialization:
    - One-to-many relationships with crow's foot notation
    - Many-to-one relationships with single line
    - Optional relationships with dashed lines
+   - Many-to-many relationships with association table
 
 3. Include:
    - Primary keys (PK)
@@ -238,10 +274,17 @@ The system uses Pydantic models for data validation and serialization:
    - Unique constraints
    - Default values
    - Nullable fields
+   - Computed properties
 
 4. Group related classes:
    - User management
    - Appointment management
    - Document management
    - Notification system
-   - Community features 
+   - Community features
+
+5. Show cascade delete relationships:
+   - UserAccount -> Notification (cascade="all, delete-orphan")
+   - UserAccount -> Comment (cascade="all, delete-orphan")
+   - UserAccount -> Reply (cascade="all, delete-orphan")
+   - Comment -> Reply (cascade="all, delete-orphan") 
